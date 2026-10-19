@@ -1,0 +1,70 @@
+# Secrets and local environment settings
+.env
+.env.*
+!.env.example
+.envrc
+.secrets/
+secrets/
+secrets.*
+*.secret
+*.secrets
+*.credentials
+credentials.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Python virtual environments
+.envtest/
+.venv/
+venv/
+env/
+ENV/
+virtualenv/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+__pypackages__/
+
+# Packaging and build output
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+wheelhouse/
+
+# Test, type-check, and lint artifacts
+.pytest_cache/
+.tox/
+.nox/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Logs and local database files
+*.log
+*.sqlite
+*.sqlite3
+*.db
+mongod.lock
+dump/
+
+# Editor and operating-system files
+.idea/
+.fleet/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+~$*
