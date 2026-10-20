@@ -27,13 +27,21 @@ Chatbot_test/
 │   └── pyvenv.cfg
 ├── app/                         # FastAPI 애플리케이션 Python 코드
 │   ├── __init__.py              # app 디렉터리를 Python 패키지로 표시
+│   ├── auth.py                  # 가입/로그인 입력 검증 및 scrypt 비밀번호 해시
 │   ├── chat_service.py          # OpenAI·Anthropic 호출
 │   ├── config.py                # 환경변수와 기본 설정
 │   ├── main.py                  # FastAPI 앱, 라우트, MongoDB 처리
 │   └── __pycache__/             # Python 실행 중 생성되는 캐시
+├── static/
+│   └── site.css                 # 랜딩·계정 화면 스타일
 ├── templates/                   # 브라우저 화면 HTML
-│   └── index.html               # 입력창과 대화 결과를 함께 보여주는 화면
+│   ├── dashboard.html           # 로그인된 회원의 프로필 화면
+│   ├── index.html               # 로그인된 사용자의 챗봇 화면
+│   ├── landing.html             # 서비스 메인 페이지
+│   ├── login.html               # 로그인 화면
+│   └── signup.html              # 회원가입 화면
 └── tests/                       # 자동 테스트
+    ├── test_auth.py             # 인증·비밀번호 해시 단위 테스트
     ├── test_chat_service.py     # 챗봇 서비스 단위 테스트
     └── __pycache__/             # Python 테스트 실행 중 생성되는 캐시
 ```
@@ -47,8 +55,9 @@ Chatbot_test/
 | 경로 | 역할 |
 | --- | --- |
 | `app/` | FastAPI 앱과 설정, 챗봇 제공자 연동 코드를 보관합니다. |
-| `templates/` | FastAPI가 반환하는 HTML 사용자 화면을 보관합니다. |
-| `tests/` | 챗봇 서비스 동작을 확인하는 테스트 코드를 보관합니다. |
+| `static/` | 랜딩과 계정 화면에서 사용하는 CSS를 보관합니다. |
+| `templates/` | FastAPI가 반환하는 랜딩, 인증, 회원정보, 챗봇 HTML 화면을 보관합니다. |
+| `tests/` | 인증과 챗봇 서비스 동작을 확인하는 테스트 코드를 보관합니다. |
 | `.envtest/` | 프로젝트 안내에서 사용하는 Python 가상환경입니다. |
 | `.venv/` | 현재 폴더에 함께 존재하는 별도의 Python 가상환경입니다. |
 | `app/__pycache__/`, `tests/__pycache__/` | Python이 실행 중 생성하는 바이트코드 캐시 폴더입니다. |
@@ -71,10 +80,17 @@ Chatbot_test/
 | 파일 | 역할 |
 | --- | --- |
 | `app/__init__.py` | 비어 있는 파일로, `app`을 Python 패키지로 인식시킵니다. |
+| `app/auth.py` | 가입·로그인 요청 검증과 Python scrypt salted 비밀번호 해시를 처리합니다. |
 | `app/config.py` | Pydantic Settings로 `.env`와 기본 설정을 읽습니다. |
 | `app/chat_service.py` | 선택된 AI 제공자에 요청하고 답변 텍스트를 반환합니다. |
-| `app/main.py` | FastAPI 앱 생성, HTML/API 라우트, MongoDB 수명주기와 대화 저장을 담당합니다. |
-| `templates/index.html` | CSS와 JavaScript가 포함된 단일 챗봇 웹 페이지입니다. |
+| `app/main.py` | FastAPI 앱, 로그인 세션, 화면/API 라우트, MongoDB 회원·로그인 이력·대화 저장을 담당합니다. |
+| `static/site.css` | 랜딩·가입·로그인·회원정보 화면의 공통 CSS입니다. |
+| `templates/landing.html` | Chatbot AI 서비스 소개 및 가입·로그인 진입 화면입니다. |
+| `templates/signup.html` | 이름·이메일·비밀번호로 가입하는 화면입니다. |
+| `templates/login.html` | 이메일과 비밀번호로 로그인하는 화면입니다. |
+| `templates/dashboard.html` | 현재 로그인한 회원 본인의 프로필을 표시합니다. |
+| `templates/index.html` | 로그인한 사용자 전용 챗봇 화면입니다. |
+| `tests/test_auth.py` | 인증 입력 검증과 비밀번호 해시를 테스트합니다. |
 | `tests/test_chat_service.py` | OpenAI 키 누락 처리 및 대화 기록을 포함한 요청 구성을 검사합니다. |
 
 ## 3. 주요 Python 파일의 기능 및 실행 흐름
@@ -92,18 +108,32 @@ Chatbot_test/
 | `OPENAI_MODEL` | `gpt-4o-mini` |
 | `ANTHROPIC_MODEL` | `claude-haiku-4-5` |
 | `CHAT_HISTORY_LIMIT` | `20` (허용 범위 1~100) |
+| `SESSION_COOKIE_SECURE` | `false` (HTTPS에서는 `true`로 지정) |
+| `SESSION_MAX_AGE_SECONDS` | `604800` (허용 범위 300~2592000) |
 | 시스템 프롬프트 | `You are a helpful assistant.` |
 
 OpenAI와 Anthropic API 키는 설정값으로 읽지만 기본 키 값은 설정 코드에 들어 있지 않습니다. 실제 키는 로컬 `.env`에 지정해야 합니다.
+`SESSION_SECRET_KEY`는 로그인 쿠키 서명용 키입니다. 설정하지 않으면 임시 키를 생성하고 서버 재시작 때 세션이 만료됩니다. 배포 시에는 `.env`에 32자 이상의 고유한 키를 설정해야 합니다.
+
+### `app/auth.py`
+
+- 이메일과 이름, 비밀번호 길이를 검증합니다.
+- 이메일은 소문자로 정규화합니다.
+- 비밀번호는 Python 표준 라이브러리 scrypt와 개별 salt로 해시합니다. 평문 비밀번호는 데이터베이스에 저장하지 않습니다.
 
 ### `app/main.py`
 
 - `create_app()`이 설정을 받아 FastAPI 앱을 만듭니다. 설정을 전달하지 않으면 `Settings()`를 사용합니다.
 - 앱 시작(lifespan) 시 MongoDB 클라이언트와 `ChatService`를 생성하고, 종료 시 서비스 클라이언트를 닫은 뒤 MongoDB 클라이언트를 닫습니다.
-- `GET /`와 `GET /chat`은 `templates/index.html` 파일을 반환합니다.
+- `GET /`은 서비스 메인 페이지, `/signup`과 `/login`은 회원가입·로그인 화면을 반환합니다.
+- `GET /dashboard`는 현재 로그인한 사용자의 프로필 화면을 제공합니다. API는 본인 회원 정보만 반환합니다.
+- `GET /chat`과 `POST /api/chat`은 인증된 사용자만 이용할 수 있습니다.
+- 세션 쿠키는 서명되며 HttpOnly와 SameSite=Lax를 사용하고, HTTPS 전용 여부는 설정으로 제어합니다.
+- 시작 시 `users.email` unique 인덱스와 `login_logs(user_id, created_at)` 인덱스를 확인/생성합니다.
+- 회원은 MongoDB `users` 컬렉션에, 로그인 결과는 `login_logs` 컬렉션에 기록됩니다. 비밀번호는 로그인 이력에 포함하지 않습니다.
 - `GET /health`는 MongoDB `ping` 명령으로 연결 상태를 확인합니다.
 - `POST /api/chat`은 메시지와 선택적 대화 ID를 받습니다. 새 대화에는 UUID를 생성합니다.
-- 지정된 컬렉션에서 해당 대화의 최근 기록을 읽어 시간순으로 정리한 후 `ChatService`에 전달합니다.
+- 현재 사용자 ID와 대화 ID가 모두 일치하는 최근 기록만 읽어 시간순으로 정리한 후 `ChatService`에 전달합니다.
 - 답변을 받으면 사용자 메시지와 어시스턴트 답변을 UTC 생성 시각과 함께 MongoDB에 저장합니다.
 - 제공자 설정 누락, 제공자 요청/응답 실패, MongoDB 오류를 각각 HTTP 오류 응답으로 처리합니다.
 - 모듈 끝에서 `app = create_app()`을 생성하며, Uvicorn은 이 앱 객체를 실행합니다.
@@ -115,17 +145,21 @@ OpenAI와 Anthropic API 키는 설정값으로 읽지만 기본 키 값은 설�
 ### 요청부터 저장까지의 실행 흐름
 
 ```text
-브라우저(templates/index.html)
-  └─ POST /api/chat { message, conversation_id? }
-       └─ app/main.py: ChatRequest 검증 및 대화 ID 결정
-            ├─ MongoDB abc.chatbot_test에서 최근 대화 읽기
-            ├─ app/chat_service.py: OpenAI 또는 Anthropic에 요청
-            ├─ MongoDB에 사용자 질문과 답변 저장
-            └─ { conversation_id, reply } 응답
-                 └─ 브라우저 대화 영역에 질문과 답변 표시
+landing.html
+  ├─ signup.html ── POST /api/auth/register ── MongoDB users
+  └─ login.html ─── POST /api/auth/login ───── MongoDB users, login_logs
+        └─ 로그인 세션 쿠키
+             ├─ dashboard.html ── GET /api/auth/me (본인 프로필)
+             └─ index.html ────── POST /api/chat { message, conversation_id? }
+                    └─ app/main.py: 세션 및 ChatRequest 검증
+                         ├─ MongoDB abc.chatbot_test에서 본인 대화만 조회
+                         ├─ app/chat_service.py: OpenAI 또는 Anthropic에 요청
+                         ├─ MongoDB에 user_id와 함께 질문·답변 저장
+                         └─ { conversation_id, reply } 응답
+                              └─ 브라우저 대화 영역에 결과 표시
 ```
 
-화면은 현재 대화 ID와 제목을 브라우저 `localStorage`에 보관하고, 새 대화 버튼으로 이를 지웁니다. 이 HTML 코드에는 페이지를 다시 열었을 때 MongoDB에서 기존 메시지를 불러오는 별도 API 호출은 구현되어 있지 않습니다.
+챗봇 화면은 사용자별 대화 ID와 제목을 브라우저 `localStorage`에 보관합니다. 서버는 사용자 ID와 대화 ID를 모두 확인해 대화 범위를 나눕니다. 페이지 재접속 시 저장된 메시지를 화면으로 복원하는 별도 API는 구현되어 있지 않습니다.
 
 ## 4. 주요 라이브러리와 설정 파일 설명
 
@@ -192,7 +226,10 @@ OpenAI와 Anthropic API 키는 설정값으로 읽지만 기본 키 값은 설�
 
 6. 브라우저에서 화면을 열고 테스트합니다.
 
-   - 챗봇 화면: `http://127.0.0.1:8000/` 또는 `http://127.0.0.1:8000/chat`
+   - 서비스 메인: `http://127.0.0.1:8000/`
+   - 회원가입/로그인: `http://127.0.0.1:8000/signup`, `http://127.0.0.1:8000/login`
+   - 본인 프로필: 로그인한 뒤 `http://127.0.0.1:8000/dashboard`
+   - 챗봇: 로그인한 뒤 `http://127.0.0.1:8000/chat`
    - Swagger API 문서: `http://127.0.0.1:8000/docs`
    - 데이터베이스 상태: `http://127.0.0.1:8000/health`
 
@@ -213,32 +250,40 @@ pyproject.toml / requirements.txt
 .env ───────────────┐
                     └─ app/config.py: Settings
                          ├─ app/main.py
-                         │    ├─ FastAPI 라우트와 lifespan
-                         │    ├─ MongoDB 접속 및 대화 저장
-                         │    └─ templates/index.html 반환
+                         │    ├─ FastAPI 라우트 및 로그인 세션
+                         │    ├─ MongoDB 회원·로그인 이력·대화 저장
+                         │    └─ templates/*.html 및 static/site.css 제공
+                         ├─ app/auth.py: 인증 스키마와 비밀번호 해시
                          └─ app/chat_service.py
                               └─ OpenAI 또는 Anthropic SDK 호출
 
-templates/index.html
-  └─ 브라우저에서 POST /api/chat 요청
-       └─ app/main.py ── app/chat_service.py ── AI 제공자 API
-                 └─ MongoDB의 abc.chatbot_test 컬렉션
+templates/landing.html
+  ├─ signup.html / login.html ── 인증 API ── MongoDB users, login_logs
+  └─ dashboard.html ─────────── GET /api/auth/me (본인 프로필)
 
+templates/index.html (로그인 필요)
+  └─ POST /api/chat ── app/chat_service.py ── AI 제공자 API
+       └─ MongoDB abc.chatbot_test (user_id 범위)
+
+tests/test_auth.py
+  └─ app/auth.py
 tests/test_chat_service.py
   ├─ app/chat_service.py
   └─ app/config.py
 ```
 
-구체적으로 `app/main.py`는 `app.config.Settings`와 `app.chat_service.ChatService`를 가져옵니다. `app/chat_service.py`도 `Settings`를 가져와 제공자와 모델을 선택합니다. HTML은 정적 파일 서버나 별도 JavaScript 빌드 도구를 사용하지 않고, `main.py` 라우트에서 직접 반환되며 자체 JavaScript의 `fetch("/api/chat")`로 API와 통신합니다. 테스트는 실제 제공자 API를 호출하지 않고 OpenAI 요청 부분을 mock 처리합니다.
+구체적으로 `app/main.py`는 `Settings`, `ChatService`, `app.auth`의 입력 스키마와 해시 함수를 사용합니다. HTML은 `main.py` 라우트에서 반환되고 CSS는 `/static` 경로로 제공합니다. 가입·로그인 화면은 인증 API를, 챗봇 화면은 `POST /api/chat`을 호출합니다. 테스트는 비밀번호 해시와 입력 검증을 확인하며 OpenAI 요청은 mock 처리합니다.
 
 ## 7. 초보자를 위한 전체 프로젝트 구조 요약
 
-- `templates/index.html`은 사용자가 보는 채팅 화면입니다.
-- `app/main.py`는 화면 주소, 채팅 API, MongoDB 저장을 연결하는 앱의 중심입니다.
+- `templates/landing.html`은 서비스 소개 화면입니다. `signup.html`과 `login.html`에서 계정을 만들고 로그인합니다.
+- `dashboard.html`은 현재 로그인한 본인의 회원 정보를, `index.html`은 챗봇을 보여줍니다.
+- `app/main.py`는 화면 주소, 인증, 채팅 API, MongoDB 저장을 연결하는 앱의 중심입니다.
+- `app/auth.py`는 이메일·가입 입력과 scrypt 비밀번호 해시를 처리합니다.
 - `app/config.py`는 `.env`에서 제공자 선택, 키, MongoDB 주소 같은 설정을 읽습니다.
 - `app/chat_service.py`는 실제 AI 제공자(OpenAI 또는 Anthropic)에 질문을 전달하고 답변을 받습니다.
-- MongoDB는 질문과 답변의 대화 기록을 `abc` 데이터베이스의 `chatbot_test` 컬렉션에 저장합니다.
+- MongoDB는 회원 정보를 `abc.users`, 로그인 결과를 `abc.login_logs`, 질문·답변을 `abc.chatbot_test`에 저장합니다. 비밀번호 원문은 저장하지 않습니다.
 - `tests/`에는 서비스의 일부 동작을 빠르게 확인하는 테스트가 있습니다.
 - `requirements.txt`는 패키지 설치 목록이며, `docker-compose.yml`은 개발용 MongoDB를 실행하는 설정입니다.
 - 처음 실행할 때는 Python 3.12 가상환경을 활성화하고 패키지를 설치한 뒤, `.env`에 사용할 API 키를 넣고 MongoDB와 Uvicorn 서버를 실행하면 됩니다.
-- 현재 구조에는 사용자 인증, 날씨 조회 API, MongoDB 대화 기록을 화면에 다시 불러오는 기능은 확인되지 않았으므로, 문서에서 구현된 기능으로 간주하지 않습니다.
+- 날씨 조회 API와 저장된 과거 대화를 브라우저에 복원하는 기능은 포함되어 있지 않습니다. 공개 서비스에는 로그인 rate limiting, 이메일 검증, 비밀번호 재설정 등도 추가 검토해야 합니다.

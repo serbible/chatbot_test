@@ -25,3 +25,6 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-haiku-4-5"
     chat_history_limit: int = Field(default=20, ge=1, le=100)
     system_prompt: str = "You are a helpful assistant."
+    session_secret_key: str | None = Field(default=None, min_length=32)
+    session_cookie_secure: bool = False
+    session_max_age_seconds: int = Field(default=604800, ge=300, le=2592000)

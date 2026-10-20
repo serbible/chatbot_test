@@ -9,7 +9,9 @@ description = "A basic chatbot API built with FastAPI, MongoDB, and OpenAI or An
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "anthropic>=0.49,<1.0",
+    "email-validator>=2.2,<3.0",
     "fastapi>=0.115,<1.0",
+    "itsdangerous>=2.2,<3.0",
     "motor>=3.7,<4.0",
     "openai>=1.68,<2.0",
     "pydantic-settings>=2.8,<3.0",

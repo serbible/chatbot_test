@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f8fc">
+    <title>회원가입 | Chatbot AI</title>
+    <link rel="stylesheet" href="/static/site.css">
+  </head>
+  <body>
+    <main class="auth-page">
+      <aside class="auth-aside">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">✦</span>
+          <span>Chatbot AI</span>
+        </a>
+        <div class="aside-copy">
+          <h1>새로운 대화를<br>시작해 보세요.</h1>
+          <p>계정을 만들고 나만의 AI 어시스턴트 공간을 만나보세요.</p>
+        </div>
+        <div class="aside-foot">당신의 다음 아이디어를 응원합니다.</div>
+      </aside>
+
+      <section class="auth-main" aria-labelledby="signup-title">
+        <div class="auth-form-wrap">
+          <h2 id="signup-title">계정 만들기</h2>
+          <p class="auth-intro">기본 정보를 입력해 Chatbot AI에 가입하세요.</p>
+          <form id="signup-form" novalidate>
+            <div class="form-field">
+              <label for="name">이름</label>
+              <input id="name" name="name" type="text" autocomplete="name" maxlength="80" required>
+            </div>
+            <div class="form-field">
+              <label for="email">이메일</label>
+              <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required>
+            </div>
+            <div class="form-field">
+              <label for="password">비밀번호</label>
+              <input id="password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required>
+              <span class="field-hint">12자 이상으로 설정해 주세요.</span>
+            </div>
+            <p class="field-hint">가입하면 이름과 이메일, 로그인 결과가 MongoDB에 저장됩니다. 비밀번호 원문은 저장하지 않습니다.</p>
+            <p class="form-error" id="form-error" role="alert" aria-live="polite"></p>
+            <button class="button auth-submit" id="submit-button" type="submit">회원가입</button>
+          </form>
+          <p class="auth-switch">이미 계정이 있으신가요? <a href="/login">로그인</a></p>
+          <a class="auth-back" href="/">← 메인으로 돌아가기</a>
+        </div>
+      </section>
+    </main>
+    <script>
+      const form = document.querySelector("#signup-form");
+      const errorMessage = document.querySelector("#form-error");
+      const submitButton = document.querySelector("#submit-button");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        errorMessage.textContent = "";
+        if (!form.reportValidity()) return;
+        submitButton.disabled = true;
+
+        try {
+          const response = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: form.querySelector("#name").value,
+              email: form.querySelector("#email").value,
+              password: form.querySelector("#password").value,
+            }),
+          });
+          const result = await response.json();
+          if (!response.ok) {
+            const detail = Array.isArray(result.detail)
+              ? result.detail.map((item) => item.msg).join(", ")
+              : result.detail || "회원가입에 실패했습니다.";
+            throw new Error(detail);
+          }
+          window.location.assign("/dashboard");
+        } catch (error) {
+          errorMessage.textContent =
+            error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.";
+          submitButton.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

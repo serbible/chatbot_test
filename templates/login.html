@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f8fc">
+    <title>로그인 | Chatbot AI</title>
+    <link rel="stylesheet" href="/static/site.css">
+  </head>
+  <body>
+    <main class="auth-page">
+      <aside class="auth-aside">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">✦</span>
+          <span>Chatbot AI</span>
+        </a>
+        <div class="aside-copy">
+          <h1>다시 만나 반가워요.</h1>
+          <p>로그인하고 이어서 질문하고, 새로운 아이디어를 탐색해 보세요.</p>
+        </div>
+        <div class="aside-foot">당신의 대화 공간이 기다리고 있어요.</div>
+      </aside>
+
+      <section class="auth-main" aria-labelledby="login-title">
+        <div class="auth-form-wrap">
+          <h2 id="login-title">로그인</h2>
+          <p class="auth-intro">계정 정보를 입력해 계속 진행하세요.</p>
+          <form id="login-form" novalidate>
+            <div class="form-field">
+              <label for="email">이메일</label>
+              <input id="email" name="email" type="email" autocomplete="username" maxlength="254" required>
+            </div>
+            <div class="form-field">
+              <label for="password">비밀번호</label>
+              <input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" required>
+            </div>
+            <p class="form-error" id="form-error" role="alert" aria-live="polite"></p>
+            <button class="button auth-submit" id="submit-button" type="submit">로그인</button>
+          </form>
+          <p class="auth-switch">아직 계정이 없으신가요? <a href="/signup">회원가입</a></p>
+          <a class="auth-back" href="/">← 메인으로 돌아가기</a>
+        </div>
+      </section>
+    </main>
+    <script>
+      const form = document.querySelector("#login-form");
+      const errorMessage = document.querySelector("#form-error");
+      const submitButton = document.querySelector("#submit-button");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        errorMessage.textContent = "";
+        if (!form.reportValidity()) return;
+        submitButton.disabled = true;
+
+        try {
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: form.querySelector("#email").value,
+              password: form.querySelector("#password").value,
+            }),
+          });
+          const result = await response.json();
+          if (!response.ok) {
+            const detail = Array.isArray(result.detail)
+              ? result.detail.map((item) => item.msg).join(", ")
+              : result.detail || "로그인에 실패했습니다.";
+            throw new Error(detail);
+          }
+          window.location.assign("/dashboard");
+        } catch (error) {
+          errorMessage.textContent =
+            error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.";
+          submitButton.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

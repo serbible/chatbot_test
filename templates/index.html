@@ -129,6 +129,61 @@
         font-size: 12px;
       }
 
+      .account-links {
+        display: grid;
+        gap: 8px;
+      }
+
+      .account-link,
+      .account-logout {
+        display: flex;
+        min-height: 38px;
+        align-items: center;
+        padding: 0 11px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: #60697a;
+        cursor: pointer;
+        font-size: 12px;
+        text-align: left;
+        text-decoration: none;
+      }
+
+      .account-link:hover,
+      .account-logout:hover {
+        border-color: #c9c2f5;
+        color: var(--accent-dark);
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .account-name {
+        color: #626b7e;
+        font-size: 12px;
+      }
+
+      .topbar-actions a {
+        color: var(--accent-dark);
+        font-size: 12px;
+        font-weight: 650;
+        text-decoration: none;
+      }
+
+      .topbar-actions button {
+        padding: 7px 10px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: #fff;
+        color: #687184;
+        cursor: pointer;
+        font-size: 11px;
+      }
+
       .main-panel {
         display: flex;
         min-width: 0;
@@ -430,6 +485,14 @@
         .connection-status {
           font-size: 11px;
         }
+
+        .topbar-actions {
+          gap: 8px;
+        }
+
+        .account-name {
+          display: none;
+        }
       }
     </style>
   </head>
@@ -438,7 +501,7 @@
       <aside class="sidebar" aria-label="대화 메뉴">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">✦</span>
-          <span>Chatbot</span>
+          <span>Chatbot AI</span>
         </div>
         <button class="new-chat" id="new-chat" type="button">
           <span aria-hidden="true">＋</span>
@@ -448,6 +511,10 @@
           <h2 class="side-label" id="history-heading">현재 대화</h2>
           <div class="conversation-item" id="conversation-title">새로운 대화</div>
         </section>
+        <nav class="account-links" aria-label="계정">
+          <a class="account-link" href="/dashboard">내 회원 정보</a>
+          <button class="account-logout" id="sidebar-logout" type="button">로그아웃</button>
+        </nav>
         <div class="sidebar-note">
           <strong>대화 기록 저장</strong>
           메시지와 답변은 MongoDB에 저장됩니다.
@@ -457,9 +524,14 @@
       <main class="main-panel">
         <header class="topbar">
           <h1 class="page-title">AI 어시스턴트</h1>
-          <div class="connection-status" aria-label="챗봇 준비됨">
-            <span class="status-dot" aria-hidden="true"></span>
-            대화할 준비가 되었어요
+          <div class="topbar-actions">
+            <span class="account-name" id="current-user-name"></span>
+            <div class="connection-status" aria-label="챗봇 준비됨">
+              <span class="status-dot" aria-hidden="true"></span>
+              대화할 준비가 되었어요
+            </div>
+            <a href="/dashboard">내 계정</a>
+            <button id="topbar-logout" type="button">로그아웃</button>
           </div>
         </header>
 
@@ -485,9 +557,10 @@
                 placeholder="메시지를 입력하세요..."
                 rows="1"
                 maxlength="8000"
+                disabled
                 required
               ></textarea>
-              <button class="send-button" id="send-button" type="submit" aria-label="메시지 보내기">
+              <button class="send-button" id="send-button" type="submit" aria-label="메시지 보내기" disabled>
                 <span aria-hidden="true">↑</span>
               </button>
             </form>
@@ -504,15 +577,43 @@
       const welcome = document.querySelector("#welcome");
       const sendButton = document.querySelector("#send-button");
       const conversationTitle = document.querySelector("#conversation-title");
-      const conversationStorageKey = "chatbot.conversationId";
-      const titleStorageKey = "chatbot.conversationTitle";
-      let conversationId = localStorage.getItem(conversationStorageKey);
+      let conversationStorageKey = "";
+      let titleStorageKey = "";
+      let conversationId = null;
       let isSending = false;
 
-      if (conversationId) {
-        conversationTitle.textContent =
-          localStorage.getItem(titleStorageKey) || "이전 대화";
-        welcome.hidden = true;
+      async function initializeChat() {
+        try {
+          const response = await fetch("/api/auth/me");
+          if (response.status === 401) {
+            window.location.replace("/login");
+            return;
+          }
+          const profile = await response.json();
+          if (!response.ok) {
+            throw new Error(profile.detail || "계정 정보를 확인하지 못했습니다.");
+          }
+
+          document.querySelector("#current-user-name").textContent = profile.name;
+          conversationStorageKey = `chatbot.conversationId:${profile.id}`;
+          titleStorageKey = `chatbot.conversationTitle:${profile.id}`;
+          conversationId = localStorage.getItem(conversationStorageKey);
+          if (conversationId) {
+            conversationTitle.textContent =
+              localStorage.getItem(titleStorageKey) || "이전 대화";
+            welcome.hidden = true;
+          }
+          input.disabled = false;
+          sendButton.disabled = false;
+        } catch (error) {
+          appendMessage(
+            "assistant",
+            error instanceof Error
+              ? error.message
+              : "계정 정보를 불러오지 못했습니다.",
+            { error: true },
+          );
+        }
       }
 
       function resizeInput() {
@@ -582,6 +683,10 @@
             }),
           });
           const result = await response.json();
+          if (response.status === 401) {
+            window.location.replace("/login");
+            return;
+          }
           if (!response.ok) {
             const detail = Array.isArray(result.detail)
               ? result.detail.map((item) => item.msg).join(", ")
@@ -637,6 +742,20 @@
         input.focus();
       });
 
+      async function logout() {
+        const response = await fetch("/api/auth/logout", { method: "POST" });
+        if (response.ok) {
+          window.location.assign("/login");
+        } else {
+          appendMessage("assistant", "로그아웃하지 못했습니다. 다시 시도해 주세요.", {
+            error: true,
+          });
+        }
+      }
+
+      document.querySelector("#sidebar-logout").addEventListener("click", logout);
+      document.querySelector("#topbar-logout").addEventListener("click", logout);
+
       document.querySelectorAll("[data-prompt]").forEach((button) => {
         button.addEventListener("click", () => {
           input.value = button.dataset.prompt;
@@ -644,6 +763,8 @@
           form.requestSubmit();
         });
       });
+
+      initializeChat();
     </script>
   </body>
 </html>
